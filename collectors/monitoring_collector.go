@@ -299,13 +299,18 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			dist := newestTSPoint.Value.DistributionValue
 			buckets, err := c.generateHistogramBuckets(dist)
 			if err == nil {
-				ch <- prometheus.MustNewConstHistogram(
+				metric, err := prometheus.NewConstHistogram(
 					metricDesc,
 					uint64(dist.Count),
 					dist.Mean*float64(dist.Count), // Stackdriver does not provide the sum, but we can fake it
 					buckets,
 					labelValues...,
 				)
+				if err != nil {
+					log.Errorf("Error adding new const metric %s: %v", metricDesc.String(), err)
+					continue
+				}
+				ch <- metric
 			} else {
 				log.Debugf("Discarding resource %s metric %s: %s", timeSeries.Resource.Type, timeSeries.Metric.Type, err)
 			}
@@ -315,12 +320,17 @@ func (c *MonitoringCollector) reportTimeSeriesMetrics(
 			continue
 		}
 
-		ch <- prometheus.MustNewConstMetric(
+		metric, err := prometheus.NewConstMetric(
 			metricDesc,
 			metricValueType,
 			metricValue,
 			labelValues...,
 		)
+		if err != nil {
+			log.Errorf("Error adding new const metric %s: %v", metricDesc.String(), err)
+			continue
+		}
+		ch <- metric
 	}
 
 	return nil
